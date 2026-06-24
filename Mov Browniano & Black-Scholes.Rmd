@@ -1,0 +1,368 @@
+---
+title: "Procesos Estocásticos - Tarea Examen"
+author: "Ruben Gascon Calixto"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+    highlight: tango
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width = 12, fig.height = 8)
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+
+# Configurar semilla para reproducibilidad
+set.seed(42)
+```
+
+
+# Ejercicio 1a: Caminata Aleatoria y Martingala
+
+## Descripción
+Generamos una caminata aleatoria que se convierte en martingala mediante el ajuste apropiado de la probabilidad $p^*$.
+
+## Funciones
+
+```{r funciones_1a}
+# Calcular p* para garantizar propiedad de martingala
+calcular_p_estrella <- function(a = 1.1, b = -0.1, alpha = 0.04) {
+  numerador <- -(a - b)^2 + sqrt((a - b)^4 - 4 * (a - b)^2 * 2 * (exp(alpha) - 1))
+  denominador <- -2 * (a - b)^2
+  return(numerador / denominador)
+}
+
+# Generar caminata aleatoria
+generar_caminata_aleatoria <- function(N = 100, a = 1.1, b = -0.1, alpha = 0.04) {
+  p_estrella <- calcular_p_estrella(a, b, alpha)
+  cat(sprintf("Valor de p* calculado: %.4f\n", p_estrella))
+  
+  # Generar pasos aleatorios
+  X <- sample(c(a, b), size = N, replace = TRUE, prob = c(p_estrella, 1 - p_estrella))
+  
+  # Caminata acumulativa
+  S_k <- c(0, cumsum(X))
+  
+  # Ajuste para martingala
+  f <- function(k) k * (p_estrella * a + (1 - p_estrella) * b)
+  Z_k <- S_k - sapply(0:N, f)
+  
+  return(list(S_k = S_k, Z_k = Z_k, p_estrella = p_estrella))
+}
+```
+
+## Simulación y Visualización
+
+```{r simulacion_1a}
+N <- 100
+resultado <- generar_caminata_aleatoria(N)
+
+# Crear dataframe para graficar
+df_plot <- data.frame(
+  k = 0:N,
+  S_k = resultado$S_k,
+  Z_k = resultado$Z_k
+)
+
+# Gráfico de S_k
+p1 <- ggplot(df_plot, aes(x = k, y = S_k)) +
+  geom_line(color = "blue", linewidth = 1) +
+  labs(title = sprintf("Caminata Aleatoria Original\n(N=%d, p*=%.4f)", N, resultado$p_estrella),
+       x = "Paso k", y = "S_k") +
+  theme_minimal()
+
+# Gráfico de Z_k
+p2 <- ggplot(df_plot, aes(x = k, y = Z_k)) +
+  geom_line(color = "red", linewidth = 1) +
+  labs(title = "Caminata Aleatoria Procesada\n(Martingala)",
+       x = "Paso k", y = "Z_k") +
+  theme_minimal()
+
+grid.arrange(p1, p2, ncol = 2)
+```
+
+---
+
+# Ejercicio 1b: Procesos Reescalados
+
+## Descripción
+Generamos procesos reescalados $W^{(r)}$ para diferentes valores de $r$ y los interpolamos linealmente.
+
+## Funciones
+
+```{r funciones_1b}
+# Calcular p* con parámetro r
+calcular_p_estrella_r <- function(a, b, alpha, r) {
+  delta <- a - b
+  numerador <- -delta^2 + sqrt(delta^4 - 4 * delta^2 * 2 * ((1 + alpha/r)^r - 1))
+  denominador <- -2 * delta^2
+  return(numerador / denominador)
+}
+
+# Generar proceso reescalado
+generar_proceso_reescalado <- function(N, a, b, alpha, r) {
+  p_estrella <- calcular_p_estrella_r(a, b, alpha, r)
+  
+  # Generar caminata
+  X <- sample(c(a, b), size = N, replace = TRUE, prob = c(p_estrella, 1 - p_estrella))
+  S <- c(0, cumsum(X))
+  
+  # Reescalar
+  tiempos <- seq(0, N/r, length.out = length(S))
+  W_r <- S / sqrt(r)
+  
+  return(data.frame(t = tiempos, W_r = W_r, r = r))
+}
+```
+
+## Simulación y Visualización
+
+```{r simulacion_1b}
+a <- 1.1
+b <- -0.1
+alpha <- 0.04
+N <- 100
+valores_r <- c(10, 20, 50)
+
+# Generar procesos para diferentes r
+df_procesos <- do.call(rbind, lapply(valores_r, function(r) {
+  cat(sprintf("r = %d, P* = %.7f\n", r, calcular_p_estrella_r(a, b, alpha, r)))
+  generar_proceso_reescalado(N, a, b, alpha, r)
+}))
+
+# Graficar
+ggplot(df_procesos, aes(x = t, y = W_r, color = factor(r))) +
+  geom_line(linewidth = 1) +
+  labs(title = "Procesos Reescalados W^(r) Interpolados",
+       x = "t", y = "W^(r)(t)", color = "r") +
+  theme_minimal() +
+  scale_color_brewer(palette = "Set1")
+```
+
+---
+
+# Ejercicio 1c: Procesos de Precios
+
+## Descripción
+Modelamos la evolución de precios usando el proceso reescalado con la fórmula exponencial.
+
+## Funciones
+
+```{r funciones_1c}
+# Generar proceso de precios
+generar_proceso_precios <- function(N, a, b, alpha, r) {
+  p_estrella <- calcular_p_estrella_r(a, b, alpha, r)
+  
+  # Generar caminata
+  X <- sample(c(a, b), size = N, replace = TRUE, prob = c(p_estrella, 1 - p_estrella))
+  S <- c(0, cumsum(X))
+  
+  # Escala de tiempo
+  t <- seq(0, 1, length.out = length(S))
+  W_r <- S / sqrt(r)
+  
+  # Calcular precios
+  precios <- 110 * exp(-alpha * t + W_r)
+  
+  return(data.frame(t = t, precio = precios, r = r))
+}
+```
+
+## Simulación y Visualización
+
+```{r simulacion_1c}
+valores_r <- c(10, 20, 50)
+
+# Generar procesos de precios
+df_precios <- do.call(rbind, lapply(valores_r, function(r) {
+  cat(sprintf("r = %d, P* = %.7f\n", r, calcular_p_estrella_r(a, b, alpha, r)))
+  generar_proceso_precios(N, a, b, alpha, r)
+}))
+
+# Graficar
+ggplot(df_precios, aes(x = t, y = precio, color = factor(r))) +
+  geom_line(linewidth = 1) +
+  labs(title = "Procesos de Precios Interpolados",
+       x = "t (tiempo)", y = "Precio", color = "r") +
+  theme_minimal() +
+  scale_color_brewer(palette = "Set2")
+```
+
+---
+
+# Ejercicio 1d: Análisis Completo con Múltiples Configuraciones
+
+## Descripción
+Realizamos un análisis exhaustivo con diferentes tamaños de simulación y valores de reescalado.
+
+## Funciones
+
+```{r funciones_1d}
+# Generar caminata aleatoria completa
+generar_caminata_completa <- function(N, p_estrella, a = 1.1, b = -0.1) {
+  X <- sample(c(a, b), size = N, replace = TRUE, prob = c(p_estrella, 1 - p_estrella))
+  S <- c(0, cumsum(X))
+  
+  # Ajuste martingala
+  k <- 0:N
+  f_k <- k * (p_estrella * a + (1 - p_estrella) * b)
+  Z <- S - f_k
+  
+  return(list(S = S, Z = Z))
+}
+
+# Generar proceso geométrico
+generar_proceso_geometrico <- function(Z, r, alpha, S0 = 110) {
+  k <- length(Z) - 1
+  tiempos <- seq(0, k/r, by = 1/r)
+  indices <- pmin(as.integer(tiempos * r) + 1, length(Z))
+  
+  W_r <- Z[indices] / sqrt(r)
+  proceso <- S0 * exp(-alpha * tiempos + W_r)
+  
+  return(data.frame(t = tiempos, precio = proceso))
+}
+```
+
+## Simulaciones para Diferentes N
+
+```{r simulacion_1d}
+a <- 1.1
+b <- -0.1
+alpha <- 0.04
+S0 <- 110
+
+# Configuraciones
+configs <- list(
+  list(N = 500, rs = c(50, 100, 250)),
+  list(N = 1000, rs = c(100, 200, 500)),
+  list(N = 5000, rs = c(500, 1000, 2500))
+)
+
+# Procesar cada configuración
+for (config in configs) {
+  N <- config$N
+  rs <- config$rs
+  
+  cat(sprintf("\n=== Simulación para N = %d ===\n", N))
+  
+  # Generar datos para cada r
+  df_completo <- do.call(rbind, lapply(rs, function(r) {
+    p_estrella <- calcular_p_estrella_r(a, b, alpha, r)
+    cat(sprintf("  r = %d, P* = %.7f\n", r, p_estrella))
+    
+    resultado <- generar_caminata_completa(N, p_estrella, a, b)
+    df_geo <- generar_proceso_geometrico(resultado$Z, r, alpha, S0)
+    df_geo$r <- r
+    df_geo
+  }))
+  
+  # Graficar
+  p <- ggplot(df_completo, aes(x = t, y = precio, color = factor(r))) +
+    geom_line(linewidth = 1) +
+    labs(title = sprintf("Procesos de Precios para N = %d", N),
+         x = "t (tiempo)", y = "Precio", color = "r") +
+    theme_minimal() +
+    scale_color_brewer(palette = "Dark2")
+  
+  print(p)
+}
+```
+
+---
+
+# Simulación de Monte Carlo para Valoración de Opción Call Europea
+
+## Parámetros de la Opción
+
+```{r parameters, echo=TRUE}
+# Establecer semilla para reproducibilidad
+set.seed(42)
+
+# Parámetros de la opción
+alpha <- 0.04  # Tasa libre de riesgo
+S0 <- 110      # Precio inicial del activo
+K <- 113       # Precio de ejercicio
+N <- 100000    # Número de simulaciones
+```
+
+## Simulación de Monte Carlo
+
+```{r monte-carlo, echo=TRUE}
+# Simular variables aleatorias X1 siguiendo distribución lognormal
+muestras_X1 <- rlnorm(N, meanlog = 0, sdlog = sqrt(2 * alpha))
+
+# Calcular el payoff descontado para cada simulación
+valores_payoff <- pmax(exp(-alpha) * (S0 * muestras_X1 - K), 0)
+
+# Estimar el valor de la opción como el promedio de los payoffs
+valor_montecarlo <- mean(valores_payoff)
+```
+
+**Resultado Monte Carlo:** `r sprintf("%.4f", valor_montecarlo)`
+
+## Fórmula de Black-Scholes
+
+```{r black-scholes, echo=TRUE}
+# Parámetros de la opción para Black-Scholes
+S0_bs <- 110  # Precio inicial del activo
+K_bs <- 113   # Precio de ejercicio
+r_bs <- 0.04  # Tasa libre de riesgo
+T_bs <- 1     # Tiempo hasta expiración
+sigma_bs <- sqrt(2 * 0.04)  # Volatilidad 
+
+# Cálculo de parámetros d1 y d2
+d1 <- (log(S0_bs/K_bs) + (r_bs + 0.5 * sigma_bs^2) * T_bs) / (sigma_bs * sqrt(T_bs))
+d2 <- d1 - sigma_bs * sqrt(T_bs)
+
+# Cálculo del precio de la opción call
+call_price <- S0_bs * pnorm(d1) - K_bs * exp(-r_bs * T_bs) * pnorm(d2)
+```
+
+**Resultado Black-Scholes:** `r sprintf("%.4f", call_price)`
+
+## Comparación de Métodos
+
+```{r comparison, echo=TRUE}
+diferencia <- abs(valor_montecarlo - call_price)
+error_relativo <- (diferencia / call_price) * 100
+```
+
+### Resumen de Resultados
+
+| Método | Valor de la Opción |
+|--------|-------------------|
+| Monte Carlo | `r sprintf("%.4f", valor_montecarlo)` |
+| Black-Scholes | `r sprintf("%.4f", call_price)` |
+| **Diferencia** | **`r sprintf("%.4f", diferencia)`** |
+| **Error Relativo** | **`r sprintf("%.2f%%", error_relativo)`** |
+
+## Análisis de la Simulación
+
+```{r analysis, echo=FALSE}
+# Análisis adicional de la simulación
+desviacion_estandar <- sd(valores_payoff)
+error_estandar <- desviacion_estandar / sqrt(N)
+intervalo_confianza <- c(
+  valor_montecarlo - 1.96 * error_estandar,
+  valor_montecarlo + 1.96 * error_estandar
+)
+```
+
+**Estadísticas de la simulación Monte Carlo:**
+
+- Desviación estándar: `r sprintf("%.4f", desviacion_estandar)`
+
+- Error estándar: `r sprintf("%.4f", error_estandar)`
+
+- Intervalo de confianza (95%): [`r sprintf("%.4f", intervalo_confianza[1])`, `r sprintf("%.4f", intervalo_confianza[2])`]
+
+
+La simulación de Monte Carlo proporciona una aproximación al valor teórico de Black-Scholes, con un error relativo del `r sprintf("%.2f%%", error_relativo)`.
