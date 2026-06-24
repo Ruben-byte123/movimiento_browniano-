@@ -26,8 +26,6 @@ El código original, desarrollado en Python (Jupyter Notebook), ha sido migrado 
 .
 ├── README.md                                    # Documentación principal
 ├── Mov Browniano & Black-Scholes.Rmd            # Análisis principal en RMarkdown
-├── Mov Browniano & Black-Scholes.html          # Reporte renderizado en HTML
-├── Procesos_Estocásticos.pdf                    # Parte teórica
 ```
 
 ## Instrucciones de Implementación
