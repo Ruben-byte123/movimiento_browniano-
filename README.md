@@ -51,7 +51,7 @@ install.packages(c(
 1. **Clonar el repositorio:**
 
 ```bash
-git clone https://github.com/JohnSalmoran/Movimiento_Browniano
+git clone https://github.com/Ruben-byte123/movimiento_browniano-
 cd Movimiento_Browniano
 ```
 
@@ -65,9 +65,7 @@ file.edit("Mov Browniano & Black-Scholes.Rmd")
 3. **Generar el reporte final:**
 
 ```r
-# Opción 1: Interfaz RStudio - Seleccionar "Knit"
-# Opción 2: Consola de R
-rmarkdown::render("Mov Browniano & Black-Scholes.Rmd")
+#Interfaz RStudio - Seleccionar "Knit"
 ```
 
 ## Marco Metodológico
